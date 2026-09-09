@@ -71,7 +71,7 @@ const messages = defineMessages('components.ManageSlideOver', {
   removearr: 'Remove from {arr}',
   openarr4k: 'Open in 4K {arr}',
   removearr4k: 'Remove from 4K {arr}',
-openarraudiobook: 'Open in Audiobook {arr}',
+  openarraudiobook: 'Open in Audiobook {arr}',
   removearraudiobook: 'Remove from Audiobook {arr}',
   clearmediadataerror: 'Something went wrong while clearing the media data.',
   removemediaerror: 'Something went wrong while removing the media.',

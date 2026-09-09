@@ -290,7 +290,7 @@ mediaRoutes.delete(
       const serviceType = is4k ? (isBook ? 'Audiobook' : '4K ') : '';
 
       if (!serviceSettings) {
-const arrName = serviceType + serviceName;
+        const arrName = serviceType + serviceName;
         logger.info(
           `There is no default ${arrName} server configured. Did you set any of your ${arrName} servers as default?`,
           {

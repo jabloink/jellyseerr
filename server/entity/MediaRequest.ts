@@ -132,7 +132,7 @@ export class MediaRequest {
 
     const quotas = await requestUser.getQuota();
 
-const canBypassQuota = user.hasPermission(Permission.MANAGE_REQUESTS);
+    const canBypassQuota = user.hasPermission(Permission.MANAGE_REQUESTS);
     const ignoreQuota =
       requestBody.ignoreQuota === true &&
       canBypassQuota &&
