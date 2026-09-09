@@ -45,7 +45,7 @@ const MediaSlider = ({
 }: MediaSliderProps) => {
   const settings = useSettings();
   const { hasPermission } = useUser();
-  const { data, error, setSize, size } = useSWRInfinite<MixedResult>(
+  const { data, setSize, size } = useSWRInfinite<MixedResult>(
     (pageIndex: number, previousPageData: MixedResult | null) => {
       if (previousPageData && pageIndex + 1 > previousPageData.totalPages) {
         return null;
