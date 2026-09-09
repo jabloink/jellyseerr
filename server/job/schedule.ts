@@ -10,6 +10,10 @@ import {
 } from '@server/lib/scanners/jellyfin';
 import { plexFullScanner, plexRecentScanner } from '@server/lib/scanners/plex';
 import { radarrScanner } from '@server/lib/scanners/radarr';
+import {
+  readarrRecentScanner,
+  readarrScanner,
+} from '@server/lib/scanners/readarr';
 import { sonarrScanner } from '@server/lib/scanners/sonarr';
 import type { JobId } from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
@@ -177,7 +181,42 @@ export const startJobs = (): void => {
     cancelFn: () => sonarrScanner.cancel(),
   });
 
-  // Checks if media is still available in plex/sonarr/radarr libs
+  // Run readarr recently added scan every 10 minutes
+  scheduledJobs.push({
+    id: 'readarr-recently-added-scan',
+    name: 'Readarr Recently Added Scan',
+    type: 'process',
+    interval: 'minutes',
+    cronSchedule: jobs['readarr-recently-added-scan'].schedule,
+    job: schedule.scheduleJob(
+      jobs['readarr-recently-added-scan'].schedule,
+      () => {
+        logger.info('Starting scheduled job: Readarr Recently Added Scan', {
+          label: 'Jobs',
+        });
+        readarrRecentScanner.run();
+      }
+    ),
+    running: () => readarrRecentScanner.status().running,
+    cancelFn: () => readarrRecentScanner.cancel(),
+  });
+
+  // Run full readarr scan every 24 hours
+  scheduledJobs.push({
+    id: 'readarr-scan',
+    name: 'Readarr Scan',
+    type: 'process',
+    interval: 'hours',
+    cronSchedule: jobs['readarr-scan'].schedule,
+    job: schedule.scheduleJob(jobs['readarr-scan'].schedule, () => {
+      logger.info('Starting scheduled job: Readarr Scan', { label: 'Jobs' });
+      readarrScanner.run();
+    }),
+    running: () => readarrScanner.status().running,
+    cancelFn: () => readarrScanner.cancel(),
+  });
+
+  // Checks if media is still available in plex/sonarr/radarr/readarr libs
   scheduledJobs.push({
     id: 'availability-sync',
     name: 'Media Availability Sync',

@@ -18,6 +18,7 @@ const defaultSettings = {
   mediaServerLogin: true,
   movie4kEnabled: false,
   series4kEnabled: false,
+  bookAudioEnabled: false,
   discoverRegion: '',
   streamingRegion: '',
   originalLanguage: '',
@@ -31,6 +32,7 @@ const defaultSettings = {
   emailEnabled: false,
   newPlexLogin: true,
   youtubeUrl: '',
+  versionCheck: true,
   plexClientIdentifier: '',
 };
 

@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import CachedImage from '@app/components/Common/CachedImage';
 import { SmallLoadingSpinner } from '@app/components/Common/LoadingSpinner';
+import SlideCheckbox from '@app/components/Common/SlideCheckbox';
 import type { User } from '@app/hooks/useUser';
 import { Permission, useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
@@ -15,7 +16,7 @@ import type {
 import type { UserResultsResponse } from '@server/interfaces/api/userInterfaces';
 import { hasPermission } from '@server/lib/permissions';
 import { isEqual } from 'lodash';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
 import Select from 'react-select';
 import useSWR from 'swr';
@@ -29,6 +30,7 @@ const messages = defineMessages('components.RequestModal.AdvancedRequester', {
   advancedoptions: 'Advanced',
   destinationserver: 'Destination Server',
   qualityprofile: 'Quality Profile',
+  metadataprofile: 'Metadata Profile',
   rootfolder: 'Root Folder',
   animenote: '* This series is an anime.',
   default: '{name} (Default)',
@@ -38,23 +40,29 @@ const messages = defineMessages('components.RequestModal.AdvancedRequester', {
   tags: 'Tags',
   selecttags: 'Select tags',
   notagoptions: 'No tags.',
+  ignoreQuotaTitle: 'Bypass User Quota',
+  ignoreQuotaDescription:
+    "This request will not count against the user's quota limits. Use with caution.",
 });
 
 export type RequestOverrides = {
   server?: number;
   profile?: number;
+  metadataProfile?: number;
   folder?: string;
   tags?: number[];
   language?: number;
   user?: User;
+  ignoreQuota?: boolean;
 };
 
 interface AdvancedRequesterProps {
-  type: 'movie' | 'tv';
+  type: 'movie' | 'tv' | 'book';
   is4k: boolean;
   isAnime?: boolean;
   defaultOverrides?: RequestOverrides;
   requestUser?: User;
+  quota?: { movie: { limit?: number }; tv: { limit?: number } };
   onChange: (overrides: RequestOverrides) => void;
 }
 
@@ -64,12 +72,15 @@ const AdvancedRequester = ({
   isAnime = false,
   defaultOverrides,
   requestUser,
+  quota,
   onChange,
 }: AdvancedRequesterProps) => {
   const intl = useIntl();
   const { user: currentUser, hasPermission: currentHasPermission } = useUser();
   const { data, error } = useSWR<ServiceCommonServer[]>(
-    `/api/v1/service/${type === 'movie' ? 'radarr' : 'sonarr'}`,
+    `/api/v1/service/${
+      type === 'movie' ? 'radarr' : type === 'book' ? 'readarr' : 'sonarr'
+    }`,
     {
       refreshInterval: 0,
       refreshWhenHidden: false,
@@ -85,6 +96,8 @@ const AdvancedRequester = ({
   const [selectedProfile, setSelectedProfile] = useState<number>(
     defaultOverrides?.profile ?? -1
   );
+  const [selectedMetadataProfile, setSelectedMetadataProfile] =
+    useState<number>(defaultOverrides?.metadataProfile ?? -1);
   const [selectedFolder, setSelectedFolder] = useState<string>(
     defaultOverrides?.folder ?? ''
   );
@@ -97,11 +110,18 @@ const AdvancedRequester = ({
     defaultOverrides?.tags ?? []
   );
 
+  const [ignoreQuota, setIgnoreQuota] = useState<boolean>(
+    defaultOverrides?.ignoreQuota ?? false
+  );
+  const isIgnoreQuotaVisible =
+    currentHasPermission([Permission.MANAGE_REQUESTS]) &&
+    ((type === 'movie' ? quota?.movie.limit : quota?.tv.limit) ?? 0) > 0;
+
   const { data: serverData, isValidating } =
     useSWR<ServiceCommonServerWithDetails>(
       selectedServer !== null
         ? `/api/v1/service/${
-            type === 'movie' ? 'radarr' : 'sonarr'
+            type === 'movie' ? 'radarr' : type === 'book' ? 'readarr' : 'sonarr'
           }/${selectedServer}`
         : null,
       {
@@ -114,6 +134,8 @@ const AdvancedRequester = ({
   const [selectedUser, setSelectedUser] = useState<User | null>(
     requestUser ?? null
   );
+  const selectedUserId = selectedUser?.id;
+  const previousSelectedUserIdRef = useRef<number | undefined>(selectedUserId);
 
   const { data: userData } = useSWR<UserResultsResponse>(
     currentHasPermission([Permission.MANAGE_REQUESTS, Permission.MANAGE_USERS])
@@ -129,13 +151,17 @@ const AdvancedRequester = ({
                 Permission.REQUEST_4K,
                 type === 'movie'
                   ? Permission.REQUEST_4K_MOVIE
-                  : Permission.REQUEST_4K_TV,
+                  : type === 'tv'
+                    ? Permission.REQUEST_4K_TV
+                    : Permission.REQUEST_AUDIO_BOOK,
               ]
             : [
                 Permission.REQUEST,
                 type === 'movie'
                   ? Permission.REQUEST_MOVIE
-                  : Permission.REQUEST_TV,
+                  : type === 'tv'
+                    ? Permission.REQUEST_TV
+                    : Permission.REQUEST_BOOK,
               ],
           user.permissions,
           { type: 'or' }
@@ -146,9 +172,14 @@ const AdvancedRequester = ({
 
   useEffect(() => {
     if (filteredUserData && !requestUser) {
-      setSelectedUser(
-        filteredUserData.find((u) => u.id === currentUser?.id) ?? null
-      );
+      const nextSelectedUser =
+        filteredUserData.find((u) => u.id === currentUser?.id) ?? null;
+
+      if (nextSelectedUser?.id !== selectedUserId) {
+        setIgnoreQuota(false);
+      }
+
+      setSelectedUser(nextSelectedUser);
     }
   }, [filteredUserData]);
 
@@ -193,6 +224,10 @@ const AdvancedRequester = ({
             ? serverData.server.activeAnimeLanguageProfileId
             : serverData.server.activeLanguageProfileId)
       );
+      const defaultMetadataProfile = serverData.metadataProfiles?.find(
+        (metadataProfile) =>
+          metadataProfile.id === serverData.server.activeMetadataProfileId
+      );
       const defaultTags = isAnime
         ? serverData.server.activeAnimeTags
         : serverData.server.activeTags;
@@ -227,6 +262,14 @@ const AdvancedRequester = ({
       }
 
       if (
+        defaultMetadataProfile &&
+        defaultMetadataProfile.id !== selectedMetadataProfile &&
+        (!applyOverrides || defaultOverrides.metadataProfile === null)
+      ) {
+        setSelectedMetadataProfile(defaultMetadataProfile.id);
+      }
+
+      if (
         defaultTags &&
         !isEqual(defaultTags, selectedTags) &&
         (!applyOverrides || defaultOverrides.tags === null)
@@ -253,35 +296,61 @@ const AdvancedRequester = ({
       setSelectedLanguage(defaultOverrides.language);
     }
 
+    if (defaultOverrides && defaultOverrides.metadataProfile != null) {
+      setSelectedMetadataProfile(defaultOverrides.metadataProfile);
+    }
+
     if (defaultOverrides && defaultOverrides.tags != null) {
       setSelectedTags(defaultOverrides.tags);
+    }
+
+    if (defaultOverrides && defaultOverrides.ignoreQuota != null) {
+      setIgnoreQuota(defaultOverrides.ignoreQuota);
     }
   }, [
     defaultOverrides?.server,
     defaultOverrides?.folder,
     defaultOverrides?.profile,
     defaultOverrides?.language,
+    defaultOverrides?.metadataProfile,
     defaultOverrides?.tags,
+    defaultOverrides?.ignoreQuota,
   ]);
+
+  useEffect(() => {
+    const selectedUserChanged =
+      previousSelectedUserIdRef.current !== selectedUserId;
+    previousSelectedUserIdRef.current = selectedUserId;
+
+    if (!isIgnoreQuotaVisible || selectedUserChanged) {
+      setIgnoreQuota(false);
+    }
+  }, [isIgnoreQuotaVisible, selectedUserId]);
 
   useEffect(() => {
     if (selectedServer !== null || selectedUser) {
       onChange({
         folder: selectedFolder !== '' ? selectedFolder : undefined,
         profile: selectedProfile !== -1 ? selectedProfile : undefined,
+        metadataProfile:
+          selectedMetadataProfile !== -1 ? selectedMetadataProfile : undefined,
         server: selectedServer ?? undefined,
         user: selectedUser ?? undefined,
         language: selectedLanguage !== -1 ? selectedLanguage : undefined,
         tags: selectedTags,
+        ignoreQuota: isIgnoreQuotaVisible && ignoreQuota ? true : undefined,
       });
     }
   }, [
     selectedFolder,
     selectedServer,
     selectedProfile,
+    selectedMetadataProfile,
     selectedUser,
     selectedLanguage,
     selectedTags,
+    ignoreQuota,
+    isIgnoreQuotaVisible,
   ]);
 
   if (!data && !error) {
@@ -300,6 +369,7 @@ const AdvancedRequester = ({
           (serverData.profiles.length < 2 &&
             serverData.rootFolders.length < 2 &&
             (serverData.languageProfiles ?? []).length < 2 &&
+            (serverData.metadataProfiles ?? []).length < 2 &&
             !serverData.tags?.length)))) &&
     (!selectedUser || (filteredUserData ?? []).length < 2)
   ) {
@@ -395,6 +465,52 @@ const AdvancedRequester = ({
                 </select>
               </div>
             )}
+            {type === 'book' &&
+              (isValidating ||
+                !serverData ||
+                (serverData.metadataProfiles &&
+                  serverData.metadataProfiles.length > 1)) && (
+                <div className="mb-3 w-full flex-shrink-0 flex-grow last:pr-0 md:w-1/4 md:pr-4">
+                  <label htmlFor="metadataProfile">
+                    {intl.formatMessage(messages.metadataprofile)}
+                  </label>
+                  <select
+                    id="metadataProfile"
+                    name="metadataProfile"
+                    value={selectedMetadataProfile}
+                    onChange={(e) =>
+                      setSelectedMetadataProfile(Number(e.target.value))
+                    }
+                    onBlur={(e) =>
+                      setSelectedMetadataProfile(Number(e.target.value))
+                    }
+                    className="border-gray-700 bg-gray-800"
+                    disabled={isValidating || !serverData}
+                  >
+                    {(isValidating || !serverData) && (
+                      <option value="">
+                        {intl.formatMessage(globalMessages.loading)}
+                      </option>
+                    )}
+                    {!isValidating &&
+                      serverData &&
+                      serverData.metadataProfiles &&
+                      serverData.metadataProfiles.map((metadataProfile) => (
+                        <option
+                          key={`metadata-profile-list${metadataProfile.id}`}
+                          value={metadataProfile.id}
+                        >
+                          {serverData.server.activeMetadataProfileId ===
+                          metadataProfile.id
+                            ? intl.formatMessage(messages.default, {
+                                name: metadataProfile.name,
+                              })
+                            : metadataProfile.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
             {(isValidating ||
               !serverData ||
               serverData.rootFolders.length > 1) && (
@@ -547,6 +663,22 @@ const AdvancedRequester = ({
               />
             </div>
           )}
+        {isIgnoreQuotaVisible && (
+          <div className="mb-2">
+            <label htmlFor="ignoreQuota">
+              {intl.formatMessage(messages.ignoreQuotaTitle)}
+            </label>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-400">
+                {intl.formatMessage(messages.ignoreQuotaDescription)}
+              </p>
+              <SlideCheckbox
+                checked={ignoreQuota}
+                onClick={() => setIgnoreQuota(!ignoreQuota)}
+              />
+            </div>
+          </div>
+        )}
         {currentHasPermission([
           Permission.MANAGE_REQUESTS,
           Permission.MANAGE_USERS,
@@ -556,7 +688,10 @@ const AdvancedRequester = ({
             <Listbox
               as="div"
               value={selectedUser}
-              onChange={(value) => setSelectedUser(value)}
+              onChange={(value) => {
+                setIgnoreQuota(false);
+                setSelectedUser(value);
+              }}
               className="space-y-1"
             >
               {({ open }) => (

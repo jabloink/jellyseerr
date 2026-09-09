@@ -1,7 +1,9 @@
 import TitleCard from '@app/components/TitleCard';
 import { Permission, useUser } from '@app/hooks/useUser';
+import type { BookDetails } from '@server/models/Book';
 import type { MovieDetails } from '@server/models/Movie';
 import type { TvDetails } from '@server/models/Tv';
+import { useEffect, useState } from 'react';
 import { useInView } from 'react-intersection-observer';
 import useSWR from 'swr';
 
@@ -9,14 +11,22 @@ export interface TmdbTitleCardProps {
   id: number;
   tmdbId: number;
   tvdbId?: number;
-  type: 'movie' | 'tv';
+  type: 'movie' | 'tv' | 'book';
   canExpand?: boolean;
   isAddedToWatchlist?: boolean;
   mutateParent?: () => void;
 }
 
-const isMovie = (movie: MovieDetails | TvDetails): movie is MovieDetails => {
+const isMovie = (
+  movie: MovieDetails | TvDetails | BookDetails
+): movie is MovieDetails => {
   return (movie as MovieDetails).title !== undefined;
+};
+
+const isBook = (
+  book: MovieDetails | TvDetails | BookDetails
+): book is BookDetails => {
+  return (book as BookDetails).author !== undefined;
 };
 
 const TmdbTitleCard = ({
@@ -34,12 +44,26 @@ const TmdbTitleCard = ({
     triggerOnce: true,
   });
   const url =
-    type === 'movie' ? `/api/v1/movie/${tmdbId}` : `/api/v1/tv/${tmdbId}`;
-  const { data: title, error } = useSWR<MovieDetails | TvDetails>(
+    type === 'movie'
+      ? `/api/v1/movie/${tmdbId}`
+      : type === 'book'
+        ? `/api/v1/book/${tmdbId}`
+        : `/api/v1/tv/${tmdbId}`;
+  const { data: title, error } = useSWR<MovieDetails | TvDetails | BookDetails>(
     inView ? `${url}` : null
   );
 
-  if (!title && !error) {
+  const [showError, setShowError] = useState(false);
+  useEffect(() => {
+    if (!error || title) {
+      setShowError(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowError(true), 20000);
+    return () => clearTimeout(timer);
+  }, [error, title]);
+
+  if (!title && (!error || !showError)) {
     return (
       <div ref={ref}>
         <TitleCard.Placeholder canExpand={canExpand} />
@@ -58,7 +82,22 @@ const TmdbTitleCard = ({
     ) : null;
   }
 
-  return isMovie(title) ? (
+  return isBook(title) ? (
+    <TitleCard
+      key={title.id}
+      id={title.id}
+      image={title.posterPath}
+      status={title.mediaInfo?.status}
+      status4k={title.mediaInfo?.status4k}
+      mediaRequests={title.mediaInfo?.requests}
+      summary={title.description}
+      title={title.title}
+      year={title.releaseDate}
+      mediaType={'book'}
+      canExpand={canExpand}
+      mutateParent={mutateParent}
+    />
+  ) : isMovie(title) ? (
     <TitleCard
       key={title.id}
       id={title.id}

@@ -23,6 +23,7 @@ import orderBy from 'lodash/orderBy';
 import { useEffect, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 import type { MultiValue, SingleValue } from 'react-select';
+import Select from 'react-select';
 import AsyncSelect from 'react-select/async';
 import useSWR from 'swr';
 
@@ -294,13 +295,14 @@ export const KeywordSelector = ({
   onChange,
 }: BaseSelectorMultiProps | BaseSelectorSingleProps) => {
   const intl = useIntl();
-  const [defaultDataValue, setDefaultDataValue] = useState<
-    { label: string; value: number }[] | null
+  const [selectedValue, setSelectedValue] = useState<
+    MultiValue<SingleVal> | SingleValue<SingleVal> | null
   >(null);
 
   useEffect(() => {
     const loadDefaultKeywords = async (): Promise<void> => {
       if (!defaultValue) {
+        setSelectedValue(null);
         return;
       }
 
@@ -317,16 +319,16 @@ export const KeywordSelector = ({
         (keyword): keyword is Keyword => keyword !== null
       );
 
-      setDefaultDataValue(
-        validKeywords.map((keyword) => ({
-          label: keyword.name,
-          value: keyword.id,
-        }))
-      );
+      const nextValue = validKeywords.map((keyword) => ({
+        label: keyword.name,
+        value: keyword.id,
+      }));
+
+      setSelectedValue(isMulti ? nextValue : (nextValue[0] ?? null));
     };
 
     loadDefaultKeywords();
-  }, [defaultValue]);
+  }, [defaultValue, isMulti]);
 
   const loadKeywordOptions = async (inputValue: string) => {
     const results = await axios.get<TmdbKeywordSearchResponse>(
@@ -346,7 +348,6 @@ export const KeywordSelector = ({
 
   return (
     <AsyncSelect
-      key={`keyword-select-${defaultDataValue}`}
       inputId="data"
       isMulti={isMulti}
       isDisabled={isDisabled}
@@ -357,10 +358,11 @@ export const KeywordSelector = ({
           ? intl.formatMessage(messages.starttyping)
           : intl.formatMessage(messages.nooptions)
       }
-      defaultValue={defaultDataValue}
+      value={selectedValue}
       loadOptions={loadKeywordOptions}
       placeholder={intl.formatMessage(messages.searchKeywords)}
       onChange={(value) => {
+        setSelectedValue(value);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onChange(value as any);
       }}
@@ -633,3 +635,53 @@ export const UserSelector = ({
 };
 
 export { default as USCertificationSelector } from './USCertificationSelector';
+
+type BookGenreVal = {
+  label: string;
+  value: string;
+};
+
+export const bookGenreOptions: BookGenreVal[] = [
+  { label: 'Biography', value: 'biography' },
+  { label: 'Classics', value: 'classics' },
+  { label: 'Fantasy', value: 'fantasy' },
+  { label: 'Historical Fiction', value: 'historical-fiction' },
+  { label: 'Horror', value: 'horror' },
+  { label: 'Mystery', value: 'mystery' },
+  { label: 'Nonfiction', value: 'nonfiction' },
+  { label: 'Romance', value: 'romance' },
+  { label: 'Science Fiction', value: 'science-fiction' },
+  { label: 'Thriller', value: 'thriller' },
+  { label: 'Young Adult', value: 'young-adult' },
+];
+
+type BookGenreSelectorProps = {
+  defaultValue?: string;
+  onChange: (value: MultiValue<BookGenreVal> | null) => void;
+};
+
+export const BookGenreSelector = ({
+  defaultValue,
+  onChange,
+}: BookGenreSelectorProps) => {
+  const intl = useIntl();
+
+  const defaultDataValue = defaultValue
+    ? bookGenreOptions.filter((option) =>
+        defaultValue.split(',').includes(option.value)
+      )
+    : null;
+
+  return (
+    <Select<BookGenreVal, true>
+      key={`book-genre-select-${defaultValue}`}
+      className="react-select-container"
+      classNamePrefix="react-select"
+      defaultValue={defaultDataValue}
+      options={bookGenreOptions}
+      isMulti
+      placeholder={intl.formatMessage(messages.searchGenres)}
+      onChange={(value) => onChange(value)}
+    />
+  );
+};

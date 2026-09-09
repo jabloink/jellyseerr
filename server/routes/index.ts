@@ -29,7 +29,9 @@ import restartFlag from '@server/utils/restartFlag';
 import { isPerson } from '@server/utils/typeHelpers';
 import { Router } from 'express';
 import authRoutes from './auth';
+import authorRoutes from './author';
 import blocklistRoutes from './blocklist';
+import bookRoutes from './book';
 import collectionRoutes from './collection';
 import discoverRoutes, { createTmdbWithRegionLanguage } from './discover';
 import issueRoutes from './issue';
@@ -39,6 +41,7 @@ import movieRoutes from './movie';
 import personRoutes from './person';
 import requestRoutes from './request';
 import searchRoutes from './search';
+import seriesRoutes from './series';
 import serviceRoutes from './service';
 import tvRoutes from './tv';
 import user from './user';
@@ -48,40 +51,47 @@ const router = Router();
 router.use(checkUser);
 
 router.get<unknown, StatusResponse>('/status', async (req, res) => {
-  const githubApi = new GithubAPI();
-
+  const settings = getSettings();
   const currentVersion = getAppVersion();
   const commitTag = getCommitTag();
+  const checkUpdate =
+    req.query.checkUpdateAvailable !== undefined
+      ? req.query.checkUpdateAvailable
+      : settings.fullPublicSettings.versionCheck;
   let updateAvailable = false;
   let commitsBehind = 0;
 
-  if (currentVersion.startsWith('develop-') && commitTag !== 'local') {
-    const commits = await githubApi.getSeerrCommits();
+  if (checkUpdate) {
+    const githubApi = new GithubAPI();
 
-    if (commits.length) {
-      const filteredCommits = commits.filter(
-        (commit) => !commit.commit.message.includes('[skip ci]')
-      );
-      if (filteredCommits[0].sha !== commitTag) {
-        updateAvailable = true;
+    if (currentVersion.startsWith('develop-') && commitTag !== 'local') {
+      const commits = await githubApi.getSeerrCommits();
+
+      if (commits.length) {
+        const filteredCommits = commits.filter(
+          (commit) => !commit.commit.message.includes('[skip ci]')
+        );
+        if (filteredCommits[0].sha !== commitTag) {
+          updateAvailable = true;
+        }
+
+        const commitIndex = filteredCommits.findIndex(
+          (commit) => commit.sha === commitTag
+        );
+
+        if (updateAvailable) {
+          commitsBehind = commitIndex;
+        }
       }
+    } else if (commitTag !== 'local') {
+      const releases = await githubApi.getSeerrReleases();
 
-      const commitIndex = filteredCommits.findIndex(
-        (commit) => commit.sha === commitTag
-      );
+      if (releases.length) {
+        const latestVersion = releases[0];
 
-      if (updateAvailable) {
-        commitsBehind = commitIndex;
-      }
-    }
-  } else if (commitTag !== 'local') {
-    const releases = await githubApi.getSeerrReleases();
-
-    if (releases.length) {
-      const latestVersion = releases[0];
-
-      if (!latestVersion.name.includes(currentVersion)) {
-        updateAvailable = true;
+        if (!latestVersion.name.includes(currentVersion)) {
+          updateAvailable = true;
+        }
       }
     }
   }
@@ -89,8 +99,7 @@ router.get<unknown, StatusResponse>('/status', async (req, res) => {
   return res.status(200).json({
     version: getAppVersion(),
     commitTag: getCommitTag(),
-    updateAvailable,
-    commitsBehind,
+    ...(checkUpdate && { updateAvailable, commitsBehind }),
     restartRequired: restartFlag.isSet(),
   });
 });
@@ -166,6 +175,9 @@ router.use(
 router.use('/movie', isAuthenticated(), movieRoutes);
 router.use('/tv', isAuthenticated(), tvRoutes);
 router.use('/media', isAuthenticated(), mediaRoutes);
+router.use('/book', isAuthenticated(), bookRoutes);
+router.use('/author', isAuthenticated(), authorRoutes);
+router.use('/series', isAuthenticated(), seriesRoutes);
 router.use('/person', isAuthenticated(), personRoutes);
 router.use('/collection', isAuthenticated(), collectionRoutes);
 router.use('/service', isAuthenticated(), serviceRoutes);

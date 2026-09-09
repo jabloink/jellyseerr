@@ -3,7 +3,6 @@ import type { NotificationAgentKey } from '@server/lib/settings';
 export interface UserSettingsGeneralResponse {
   username?: string;
   email?: string;
-  discordId?: string;
   locale?: string;
   discoverRegion?: string;
   streamingRegion?: string;
@@ -12,10 +11,14 @@ export interface UserSettingsGeneralResponse {
   movieQuotaDays?: number;
   tvQuotaLimit?: number;
   tvQuotaDays?: number;
+  bookQuotaLimit?: number;
+  bookQuotaDays?: number;
   globalMovieQuotaDays?: number;
   globalMovieQuotaLimit?: number;
   globalTvQuotaLimit?: number;
   globalTvQuotaDays?: number;
+  globalBookQuotaLimit?: number;
+  globalBookQuotaDays?: number;
   watchlistSyncMovies?: boolean;
   watchlistSyncTv?: boolean;
 }
@@ -26,7 +29,7 @@ export interface UserSettingsNotificationsResponse {
   pgpKey?: string;
   discordEnabled?: boolean;
   discordEnabledTypes?: number;
-  discordId?: string;
+  discordIds?: string[];
   pushbulletAccessToken?: string;
   pushoverApplicationToken?: string;
   pushoverUserKey?: string;

@@ -2,16 +2,22 @@ import Spinner from '@app/assets/spinner.svg';
 import { CheckCircleIcon } from '@heroicons/react/20/solid';
 import {
   BellIcon,
+  BookOpenIcon,
   ClockIcon,
   EyeSlashIcon,
   MinusSmallIcon,
+  SpeakerWaveIcon,
   TrashIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/solid';
 import { MediaStatus } from '@server/constants/media';
 
 interface StatusBadgeMiniProps {
   status: MediaStatus;
   is4k?: boolean;
+  audiobook?: boolean;
+  book?: boolean;
+  missing?: boolean;
   inProgress?: boolean;
   // Should the badge shrink on mobile to a smaller size? (TitleCard)
   shrink?: boolean;
@@ -20,12 +26,23 @@ interface StatusBadgeMiniProps {
 const StatusBadgeMini = ({
   status,
   is4k = false,
+  audiobook = false,
+  book = false,
+  missing = false,
   inProgress = false,
   shrink = false,
 }: StatusBadgeMiniProps) => {
+  const hasFormatIcon = audiobook || book;
+
   const badgeStyle = [
     `rounded-full shadow-md ${
-      shrink ? 'w-4 sm:w-5 border p-0' : 'w-5 ring-1 p-0.5'
+      hasFormatIcon
+        ? `flex items-center gap-0.5 ${
+            shrink ? 'h-4 border p-0 pr-1 sm:h-5' : 'ring-1 p-0.5 pr-1.5'
+          }`
+        : shrink
+          ? 'w-4 sm:w-5 border p-0'
+          : 'w-5 ring-1 p-0.5'
     }`,
   ];
 
@@ -66,9 +83,21 @@ const StatusBadgeMini = ({
       break;
   }
 
+  if (missing) {
+    badgeStyle.splice(1);
+    badgeStyle.push('bg-red-500/80 border-red-400 ring-red-400 text-red-100');
+    indicatorIcon = <XMarkIcon />;
+  }
+
   if (inProgress) {
     indicatorIcon = <Spinner />;
   }
+
+  const formatIcon = audiobook ? (
+    <SpeakerWaveIcon />
+  ) : book ? (
+    <BookOpenIcon />
+  ) : null;
 
   return (
     <div
@@ -76,7 +105,18 @@ const StatusBadgeMini = ({
         shrink ? '' : 'ring-1'
       }`}
     >
-      <div className={badgeStyle.join(' ')}>{indicatorIcon}</div>
+      <div className={badgeStyle.join(' ')}>
+        {formatIcon ? (
+          <>
+            <span className="h-3.5 w-3.5 sm:h-[18px] sm:w-[18px]">
+              {indicatorIcon}
+            </span>
+            <span className="h-3 w-3 sm:h-3.5 sm:w-3.5">{formatIcon}</span>
+          </>
+        ) : (
+          indicatorIcon
+        )}
+      </div>
       {is4k && <span className="pl-1 pr-2 text-gray-200">4K</span>}
     </div>
   );

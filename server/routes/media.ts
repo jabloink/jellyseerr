@@ -1,4 +1,5 @@
 import RadarrAPI from '@server/api/servarr/radarr';
+import ReadarrAPI from '@server/api/servarr/readarr';
 import SonarrAPI from '@server/api/servarr/sonarr';
 import TautulliAPI from '@server/api/tautulli';
 import TheMovieDb from '@server/api/themoviedb';
@@ -17,9 +18,39 @@ import logger from '@server/logger';
 import { isAuthenticated } from '@server/middleware/auth';
 import { Router } from 'express';
 import type { FindOneOptions } from 'typeorm';
-import { In, IsNull, Not } from 'typeorm';
+import { EntityNotFoundError, In, IsNull, Not } from 'typeorm';
 
 const mediaRoutes = Router();
+
+mediaRoutes.get(
+  '/lookup/:id',
+  isAuthenticated(Permission.MANAGE_REQUESTS),
+  async (req, res, next) => {
+    const mediaType = req.query.mediaType;
+    if (
+      mediaType !== MediaType.MOVIE &&
+      mediaType !== MediaType.TV &&
+      mediaType !== MediaType.BOOK
+    ) {
+      return next({
+        status: 400,
+        message: 'Invalid or missing mediaType query parameter.',
+      });
+    }
+
+    const mediaRepository = getRepository(Media);
+
+    try {
+      const media = await mediaRepository.findOne({
+        where: { tmdbId: Number(req.params.id), mediaType },
+      });
+
+      return res.status(200).json({ id: media?.id || null });
+    } catch (e) {
+      next({ status: 500, message: e.message });
+    }
+  }
+);
 
 mediaRoutes.get('/', async (req, res, next) => {
   const mediaRepository = getRepository(Media);
@@ -68,10 +99,14 @@ mediaRoutes.get('/', async (req, res, next) => {
 
   let whereClause: FindOneOptions<Media>['where'];
   if (statusFilter || req.query.sort === 'mediaAdded') {
-    whereClause = {};
-    if (statusFilter) whereClause.status = statusFilter;
-    if (req.query.sort === 'mediaAdded')
-      whereClause.mediaAddedAt = Not(IsNull());
+    const mediaAddedClause =
+      req.query.sort === 'mediaAdded' ? { mediaAddedAt: Not(IsNull()) } : {};
+    whereClause = statusFilter
+      ? [
+          { ...mediaAddedClause, status: statusFilter },
+          { ...mediaAddedClause, status4k: statusFilter },
+        ]
+      : mediaAddedClause;
   }
 
   try {
@@ -187,11 +222,15 @@ mediaRoutes.delete(
 
       return res.status(204).send();
     } catch (e) {
-      logger.error('Something went wrong fetching media in delete request', {
+      if (e instanceof EntityNotFoundError) {
+        return res.status(204).send();
+      }
+      logger.error('Something went wrong deleting media', {
         label: 'Media',
+        mediaId: req.params.id,
         message: e.message,
       });
-      next({ status: 404, message: 'Media not found' });
+      next({ status: 500, message: 'Failed to delete media' });
     }
   }
 );
@@ -209,11 +248,16 @@ mediaRoutes.delete(
 
       const is4k = String(req.query.is4k) === 'true';
       const isMovie = media.mediaType === MediaType.MOVIE;
+      const isBook = media.mediaType === MediaType.BOOK;
 
       let serviceSettings;
       if (isMovie) {
         serviceSettings = settings.radarr.find(
           (radarr) => radarr.isDefault && radarr.is4k === is4k
+        );
+      } else if (isBook) {
+        serviceSettings = settings.readarr.find(
+          (readarr) => readarr.isDefault && readarr.is4k === is4k
         );
       } else {
         serviceSettings = settings.sonarr.find(
@@ -231,6 +275,10 @@ mediaRoutes.delete(
           serviceSettings = settings.radarr.find(
             (radarr) => radarr.id === specificServiceId
           );
+        } else if (isBook) {
+          serviceSettings = settings.readarr.find(
+            (readarr) => readarr.id === specificServiceId
+          );
         } else {
           serviceSettings = settings.sonarr.find(
             (sonarr) => sonarr.id === specificServiceId
@@ -238,19 +286,22 @@ mediaRoutes.delete(
         }
       }
 
+      const serviceName = isMovie ? 'Radarr' : isBook ? 'Readarr' : 'Sonarr';
+      const serviceType = is4k ? (isBook ? 'Audiobook' : '4K ') : '';
+
       if (!serviceSettings) {
-        logger.warn(
-          `There is no default ${
-            is4k ? '4K ' : '' + isMovie ? 'Radarr' : 'Sonarr'
-          }/ server configured. Did you set any of your ${
-            is4k ? '4K ' : '' + isMovie ? 'Radarr' : 'Sonarr'
-          } servers as default?`,
+        const arrName = serviceType + serviceName;
+        logger.info(
+          `There is no default ${arrName} server configured. Did you set any of your ${arrName} servers as default?`,
           {
             label: 'Media Request',
             mediaId: media.id,
           }
         );
-        return;
+        return next({
+          status: 409,
+          message: `No ${arrName} server configured to delete media files`,
+        });
       }
 
       let service;
@@ -258,6 +309,11 @@ mediaRoutes.delete(
         service = new RadarrAPI({
           apiKey: serviceSettings?.apiKey,
           url: RadarrAPI.buildUrl(serviceSettings, '/api/v3'),
+        });
+      } else if (isBook) {
+        service = new ReadarrAPI({
+          apiKey: serviceSettings?.apiKey,
+          url: ReadarrAPI.buildUrl(serviceSettings, '/api/v1'),
         });
       } else {
         service = new SonarrAPI({
@@ -268,6 +324,8 @@ mediaRoutes.delete(
 
       if (isMovie) {
         await (service as RadarrAPI).removeMovie(media.tmdbId);
+      } else if (isBook) {
+        await (service as ReadarrAPI).removeBook(media.tmdbId);
       } else {
         const tmdb = new TheMovieDb();
         const series = await tmdb.getTvShow({ tvId: media.tmdbId });
@@ -276,15 +334,27 @@ mediaRoutes.delete(
           throw new Error('TVDB ID not found');
         }
         await (service as SonarrAPI).removeSeries(tvdbId);
+
+        for (const season of media.seasons) {
+          season[is4k ? 'status4k' : 'status'] = MediaStatus.DELETED;
+        }
       }
+
+      media[is4k ? 'status4k' : 'status'] = MediaStatus.DELETED;
+      media.resetServiceData(is4k);
+      await mediaRepository.save(media);
 
       return res.status(204).send();
     } catch (e) {
-      logger.error('Something went wrong fetching media in delete request', {
+      if (e instanceof EntityNotFoundError) {
+        return next({ status: 404, message: 'Media not found' });
+      }
+      logger.error('Something went wrong deleting media file', {
         label: 'Media',
+        mediaId: req.params.id,
         message: e.message,
       });
-      next({ status: 404, message: 'Media not found' });
+      next({ status: 500, message: 'Failed to delete media file' });
     }
   }
 );

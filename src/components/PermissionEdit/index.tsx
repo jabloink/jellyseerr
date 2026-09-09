@@ -18,7 +18,8 @@ export const messages = defineMessages('components.PermissionEdit', {
   managerequestsDescription:
     'Grant permission to manage media requests. All requests made by a user with this permission will be automatically approved.',
   request: 'Request',
-  requestDescription: 'Grant permission to submit requests for non-4K media.',
+  requestDescription:
+    'Grant permission to submit requests for non-4K movies, series, and ebooks.',
   requestMovies: 'Request Movies',
   requestMoviesDescription:
     'Grant permission to submit requests for non-4K movies.',
@@ -27,29 +28,40 @@ export const messages = defineMessages('components.PermissionEdit', {
     'Grant permission to submit requests for non-4K series.',
   autoapprove: 'Auto-Approve',
   autoapproveDescription:
-    'Grant automatic approval for all non-4K media requests.',
+    'Grant automatic approval for all non-4K movie, series, and ebook requests.',
   autoapproveMovies: 'Auto-Approve Movies',
   autoapproveMoviesDescription:
     'Grant automatic approval for non-4K movie requests.',
   autoapproveSeries: 'Auto-Approve Series',
   autoapproveSeriesDescription:
     'Grant automatic approval for non-4K series requests.',
-  autoapprove4k: 'Auto-Approve 4K',
+  autoapprove4k: 'Auto-Approve 4K & Audiobooks',
   autoapprove4kDescription:
-    'Grant automatic approval for all 4K media requests.',
+    'Grant automatic approval for all 4K movie, 4K series, and audiobook requests.',
   autoapprove4kMovies: 'Auto-Approve 4K Movies',
   autoapprove4kMoviesDescription:
     'Grant automatic approval for 4K movie requests.',
   autoapprove4kSeries: 'Auto-Approve 4K Series',
   autoapprove4kSeriesDescription:
     'Grant automatic approval for 4K series requests.',
-  request4k: 'Request 4K',
-  request4kDescription: 'Grant permission to submit requests for 4K media.',
+  request4k: 'Request 4K & Audiobooks',
+  request4kDescription:
+    'Grant permission to submit requests for 4K movies, 4K series, and audiobooks.',
   request4kMovies: 'Request 4K Movies',
   request4kMoviesDescription:
     'Grant permission to submit requests for 4K movies.',
   request4kTv: 'Request 4K Series',
   request4kTvDescription: 'Grant permission to submit requests for 4K series.',
+  requestBooks: 'Request Ebooks',
+  requestBooksDescription: 'Grant permission to submit requests for ebooks.',
+  autoapproveBooks: 'Auto-Approve Ebooks',
+  autoapproveBooksDescription: 'Grant automatic approval for ebook requests.',
+  requestAudiobooks: 'Request Audiobooks',
+  requestAudiobooksDescription:
+    'Grant permission to submit requests for audiobooks.',
+  autoapproveAudiobooks: 'Auto-Approve Audiobooks',
+  autoapproveAudiobooksDescription:
+    'Grant automatic approval for audiobook requests.',
   advancedrequest: 'Advanced Requests',
   advancedrequestDescription:
     'Grant permission to modify advanced media request options.',
@@ -182,6 +194,12 @@ export const PermissionEdit = ({
           description: intl.formatMessage(messages.requestTvDescription),
           permission: Permission.REQUEST_TV,
         },
+        {
+          id: 'request-book',
+          name: intl.formatMessage(messages.requestBooks),
+          description: intl.formatMessage(messages.requestBooksDescription),
+          permission: Permission.REQUEST_BOOK,
+        },
       ],
     },
     {
@@ -215,6 +233,18 @@ export const PermissionEdit = ({
           requires: [
             {
               permissions: [Permission.REQUEST, Permission.REQUEST_TV],
+              type: 'or',
+            },
+          ],
+        },
+        {
+          id: 'autoapprovebook',
+          name: intl.formatMessage(messages.autoapproveBooks),
+          description: intl.formatMessage(messages.autoapproveBooksDescription),
+          permission: Permission.AUTO_APPROVE_BOOK,
+          requires: [
+            {
+              permissions: [Permission.REQUEST, Permission.REQUEST_BOOK],
               type: 'or',
             },
           ],
@@ -276,6 +306,14 @@ export const PermissionEdit = ({
           description: intl.formatMessage(messages.request4kTvDescription),
           permission: Permission.REQUEST_4K_TV,
         },
+        {
+          id: 'request4k-books',
+          name: intl.formatMessage(messages.requestAudiobooks),
+          description: intl.formatMessage(
+            messages.requestAudiobooksDescription
+          ),
+          permission: Permission.REQUEST_AUDIO_BOOK,
+        },
       ],
     },
     {
@@ -313,6 +351,23 @@ export const PermissionEdit = ({
           requires: [
             {
               permissions: [Permission.REQUEST_4K, Permission.REQUEST_4K_TV],
+              type: 'or',
+            },
+          ],
+        },
+        {
+          id: 'autoapproveaudio-books',
+          name: intl.formatMessage(messages.autoapproveAudiobooks),
+          description: intl.formatMessage(
+            messages.autoapproveAudiobooksDescription
+          ),
+          permission: Permission.AUTO_APPROVE_AUDIO_BOOK,
+          requires: [
+            {
+              permissions: [
+                Permission.REQUEST_4K,
+                Permission.REQUEST_AUDIO_BOOK,
+              ],
               type: 'or',
             },
           ],

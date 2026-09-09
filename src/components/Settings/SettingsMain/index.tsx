@@ -31,6 +31,7 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   generalsettingsDescription:
     'Configure global and default settings for Seerr.',
   apikey: 'API Key',
+  hardcoverapikey: 'Hardcover API Key',
   apikeyCopied: 'Copied API key to clipboard.',
   applicationTitle: 'Application Title',
   applicationurl: 'Application URL',
@@ -74,6 +75,8 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   youtubeUrl: 'YouTube URL',
   youtubeUrlTip:
     'Base URL for YouTube videos if a self-hosted YouTube instance is used.',
+  versionCheck: 'Version Check',
+  versionCheckTip: 'Automatically check for new versions on GitHub.',
   validationUrl: 'You must provide a valid URL',
   validationUrlTrailingSlash: 'URL must not end in a trailing slash',
 });
@@ -167,6 +170,7 @@ const SettingsMain = () => {
       <div className="section">
         <Formik
           initialValues={{
+            hardcoverapikey: data?.hardcoverapikey,
             applicationTitle: data?.applicationTitle,
             applicationUrl: data?.applicationUrl,
             hideAvailable: data?.hideAvailable,
@@ -183,12 +187,14 @@ const SettingsMain = () => {
             enableSpecialEpisodes: data?.enableSpecialEpisodes,
             cacheImages: data?.cacheImages,
             youtubeUrl: data?.youtubeUrl,
+            versionCheck: data?.versionCheck,
           }}
           enableReinitialize
           validationSchema={MainSettingsSchema}
           onSubmit={async (values) => {
             try {
               await axios.post('/api/v1/settings/main', {
+                hardcoverapikey: values.hardcoverapikey,
                 applicationTitle: values.applicationTitle,
                 applicationUrl: values.applicationUrl,
                 hideAvailable: values.hideAvailable,
@@ -205,6 +211,7 @@ const SettingsMain = () => {
                 enableSpecialEpisodes: values.enableSpecialEpisodes,
                 cacheImages: values.cacheImages,
                 youtubeUrl: values.youtubeUrl,
+                versionCheck: values?.versionCheck,
               });
               mutate('/api/v1/settings/public');
               mutate('/api/v1/status');
@@ -242,39 +249,61 @@ const SettingsMain = () => {
             return (
               <Form className="section" data-testid="settings-main-form">
                 {userHasPermission(Permission.ADMIN) && (
-                  <div className="form-row">
-                    <label htmlFor="apiKey" className="text-label">
-                      {intl.formatMessage(messages.apikey)}
-                    </label>
-                    <div className="form-input-area">
-                      <div className="form-input-field">
-                        <SensitiveInput
-                          type="text"
-                          id="apiKey"
-                          className="rounded-l-only"
-                          value={data?.apiKey}
-                          readOnly
-                        />
-                        <CopyButton
-                          textToCopy={data?.apiKey ?? ''}
-                          toastMessage={intl.formatMessage(
-                            messages.apikeyCopied
-                          )}
-                          key={data?.apiKey}
-                        />
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            regenerate();
-                          }}
-                          className="input-action"
-                          type="button"
-                        >
-                          <ArrowPathIcon />
-                        </button>
+                  <>
+                    <div className="form-row">
+                      <label htmlFor="apiKey" className="text-label">
+                        {intl.formatMessage(messages.apikey)}
+                      </label>
+                      <div className="form-input-area">
+                        <div className="form-input-field">
+                          <SensitiveInput
+                            type="text"
+                            id="apiKey"
+                            className="rounded-l-only"
+                            value={data?.apiKey}
+                            readOnly
+                          />
+                          <CopyButton
+                            textToCopy={data?.apiKey ?? ''}
+                            toastMessage={intl.formatMessage(
+                              messages.apikeyCopied
+                            )}
+                            key={data?.apiKey}
+                          />
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              regenerate();
+                            }}
+                            className="input-action"
+                            type="button"
+                          >
+                            <ArrowPathIcon />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                    <div className="form-row">
+                      <label htmlFor="hardcoverapikey" className="text-label">
+                        {intl.formatMessage(messages.hardcoverapikey)}
+                      </label>
+                      <div className="form-input-area">
+                        <div className="form-input-field">
+                          <SensitiveInput
+                            as="field"
+                            type="text"
+                            id="hardcoverapikey"
+                            name="hardcoverapikey"
+                            className="rounded-l-only"
+                          />
+                          <CopyButton
+                            textToCopy={values?.hardcoverapikey ?? ''}
+                            key={values?.hardcoverapikey}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 )}
                 <div className="form-row">
                   <label htmlFor="applicationTitle" className="text-label">
@@ -605,6 +634,24 @@ const SettingsMain = () => {
                       typeof errors.youtubeUrl === 'string' && (
                         <div className="error">{errors.youtubeUrl}</div>
                       )}
+                  </div>
+                </div>
+                <div className="form-row">
+                  <label htmlFor="versionCheck" className="text-label">
+                    {intl.formatMessage(messages.versionCheck)}
+                    <span className="label-tip">
+                      {intl.formatMessage(messages.versionCheckTip)}
+                    </span>
+                  </label>
+                  <div className="form-input-area">
+                    <Field
+                      type="checkbox"
+                      id="versionCheck"
+                      name="versionCheck"
+                      onChange={() => {
+                        setFieldValue('versionCheck', !values.versionCheck);
+                      }}
+                    />
                   </div>
                 </div>
                 <div className="actions">

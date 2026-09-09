@@ -5,6 +5,7 @@ import type { FilterOptions } from '@app/components/Discover/constants';
 import { countActiveFilters } from '@app/components/Discover/constants';
 import LanguageSelector from '@app/components/LanguageSelector';
 import {
+  BookGenreSelector,
   CompanySelector,
   GenreSelector,
   KeywordSelector,
@@ -50,7 +51,7 @@ const messages = defineMessages('components.Discover.FilterSlideover', {
 type FilterSlideoverProps = {
   show: boolean;
   onClose: () => void;
-  type: 'movie' | 'tv';
+  type: 'movie' | 'tv' | 'book';
   currentFilters: FilterOptions;
 };
 
@@ -65,10 +66,101 @@ const FilterSlideover = ({
   const updateQueryParams = useUpdateQueryParams({});
   const batchUpdateQueryParams = useBatchUpdateQueryParams({});
 
-  const dateGte =
-    type === 'movie' ? 'primaryReleaseDateGte' : 'firstAirDateGte';
-  const dateLte =
-    type === 'movie' ? 'primaryReleaseDateLte' : 'firstAirDateLte';
+  const dateGte = type === 'tv' ? 'firstAirDateGte' : 'primaryReleaseDateGte';
+  const dateLte = type === 'tv' ? 'firstAirDateLte' : 'primaryReleaseDateLte';
+
+  if (type === 'book') {
+    return (
+      <SlideOver
+        show={show}
+        title={intl.formatMessage(messages.filters)}
+        subText={intl.formatMessage(messages.activefilters, {
+          count: countActiveFilters(currentFilters),
+        })}
+        onClose={() => onClose()}
+      >
+        <div className="flex flex-col space-y-4">
+          <div>
+            <div className="mb-2 text-lg font-semibold">
+              {intl.formatMessage(messages.releaseDate)}
+            </div>
+            <div className="relative z-40 flex space-x-2">
+              <div className="flex flex-col">
+                <div className="mb-2">{intl.formatMessage(messages.from)}</div>
+                <Datepicker
+                  primaryColor="indigo"
+                  value={{
+                    startDate: currentFilters[dateGte] ?? null,
+                    endDate: currentFilters[dateGte] ?? null,
+                  }}
+                  onChange={(value) => {
+                    updateQueryParams(
+                      dateGte,
+                      value?.startDate ? (value.startDate as string) : undefined
+                    );
+                  }}
+                  inputName="fromdate"
+                  useRange={false}
+                  asSingle
+                  containerClassName="datepicker-wrapper"
+                  inputClassName="pr-1 sm:pr-4 text-base leading-5"
+                />
+              </div>
+              <div className="flex flex-col">
+                <div className="mb-2">{intl.formatMessage(messages.to)}</div>
+                <Datepicker
+                  primaryColor="indigo"
+                  value={{
+                    startDate: currentFilters[dateLte] ?? null,
+                    endDate: currentFilters[dateLte] ?? null,
+                  }}
+                  onChange={(value) => {
+                    updateQueryParams(
+                      dateLte,
+                      value?.startDate ? (value.startDate as string) : undefined
+                    );
+                  }}
+                  inputName="todate"
+                  useRange={false}
+                  asSingle
+                  containerClassName="datepicker-wrapper"
+                  inputClassName="pr-1 sm:pr-4 text-base leading-5"
+                />
+              </div>
+            </div>
+          </div>
+          <span className="text-lg font-semibold">
+            {intl.formatMessage(messages.genres)}
+          </span>
+          <BookGenreSelector
+            defaultValue={currentFilters.genre}
+            onChange={(value) => {
+              updateQueryParams('genre', value?.map((v) => v.value).join(','));
+            }}
+          />
+          <div className="pt-4">
+            <Button
+              className="w-full"
+              disabled={Object.keys(currentFilters).length === 0}
+              onClick={() => {
+                const copyCurrent = Object.assign({}, currentFilters);
+                (
+                  Object.keys(copyCurrent) as (keyof typeof currentFilters)[]
+                ).forEach((k) => {
+                  copyCurrent[k] = undefined;
+                });
+                batchUpdateQueryParams(copyCurrent);
+                onClose();
+              }}
+            >
+              <XCircleIcon />
+              <span>{intl.formatMessage(messages.clearfilters)}</span>
+            </Button>
+          </div>
+        </div>
+      </SlideOver>
+    );
+  }
 
   return (
     <SlideOver

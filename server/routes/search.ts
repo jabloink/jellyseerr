@@ -1,7 +1,10 @@
+import Hardcover from '@server/api/hardcover';
+import type { HardcoverSearchMultiResponse } from '@server/api/hardcover/interfaces';
 import TheMovieDb from '@server/api/themoviedb';
 import type { TmdbSearchMultiResponse } from '@server/api/themoviedb/interfaces';
 import Media from '@server/entity/Media';
 import { findSearchProvider } from '@server/lib/search';
+import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import { mapSearchResults } from '@server/models/Search';
 import { Router } from 'express';
@@ -11,7 +14,7 @@ const searchRoutes = Router();
 searchRoutes.get('/', async (req, res, next) => {
   const queryString = req.query.query as string;
   const searchProvider = findSearchProvider(queryString.toLowerCase());
-  let results: TmdbSearchMultiResponse;
+  let results: TmdbSearchMultiResponse | HardcoverSearchMultiResponse;
 
   try {
     if (searchProvider) {
@@ -22,6 +25,20 @@ searchRoutes.get('/', async (req, res, next) => {
         id,
         language: (req.query.language as string) ?? req.locale,
         query: queryString,
+      });
+    } else if (req.query.type === 'hardcover') {
+      if (!getSettings().main.hardcoverapikey) {
+        return next({
+          status: 503,
+          message: 'Hardcover API key is not configured.',
+        });
+      }
+
+      const hardcover = new Hardcover();
+
+      results = await hardcover.search({
+        query: queryString,
+        page: Number(req.query.page),
       });
     } else {
       const tmdb = new TheMovieDb();

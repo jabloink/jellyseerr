@@ -14,6 +14,8 @@ import { useIntl } from 'react-intl';
 const messages = defineMessages('components.StatusBadge', {
   status: '{status}',
   status4k: '4K {status}',
+  statusAudiobook: 'Audiobook {status}',
+  statusEbook: 'Ebook {status}',
   playonplex: 'Play on {mediaServerName}',
   openinarr: 'Open in {arr}',
   managemedia: 'Manage {mediaType}',
@@ -29,7 +31,7 @@ interface StatusBadgeProps {
   plexUrl?: string;
   serviceUrl?: string;
   tmdbId?: number;
-  mediaType?: 'movie' | 'tv';
+  mediaType?: 'movie' | 'tv' | 'book';
   title?: string | string[];
   statusLabelOverride?: string;
 }
@@ -97,13 +99,22 @@ const StatusBadge = ({
       mediaLink = `/${mediaType}/${tmdbId}?manage=1`;
       mediaLinkDescription = intl.formatMessage(messages.managemedia, {
         mediaType: intl.formatMessage(
-          mediaType === 'movie' ? globalMessages.movie : globalMessages.tvshow
+          mediaType === 'movie'
+            ? globalMessages.movie
+            : mediaType === 'book'
+              ? globalMessages.book
+              : globalMessages.tvshow
         ),
       });
     } else if (hasPermission(Permission.ADMIN) && serviceUrl) {
       mediaLink = serviceUrl;
       mediaLinkDescription = intl.formatMessage(messages.openinarr, {
-        arr: mediaType === 'movie' ? 'Radarr' : 'Sonarr',
+        arr:
+          mediaType === 'movie'
+            ? 'Radarr'
+            : mediaType === 'book'
+              ? 'Readarr'
+              : 'Sonarr',
       });
     }
   }
@@ -181,7 +192,13 @@ const StatusBadge = ({
             >
               <span>
                 {intl.formatMessage(
-                  is4k ? messages.status4k : messages.status,
+                  is4k
+                    ? mediaType === 'book'
+                      ? messages.statusAudiobook
+                      : messages.status4k
+                    : mediaType === 'book'
+                      ? messages.statusEbook
+                      : messages.status,
                   {
                     status: inProgress
                       ? intl.formatMessage(globalMessages.processing)
@@ -246,7 +263,11 @@ const StatusBadge = ({
             >
               <span>
                 {intl.formatMessage(
-                  is4k ? messages.status4k : messages.status,
+                  mediaType === 'book'
+                    ? messages.status
+                    : is4k
+                      ? messages.status4k
+                      : messages.status,
                   {
                     status: inProgress
                       ? intl.formatMessage(globalMessages.processing)
@@ -311,7 +332,13 @@ const StatusBadge = ({
             >
               <span>
                 {intl.formatMessage(
-                  is4k ? messages.status4k : messages.status,
+                  is4k
+                    ? mediaType === 'book'
+                      ? messages.statusAudiobook
+                      : messages.status4k
+                    : mediaType === 'book'
+                      ? messages.statusEbook
+                      : messages.status,
                   {
                     status: inProgress
                       ? intl.formatMessage(globalMessages.processing)
@@ -354,9 +381,18 @@ const StatusBadge = ({
       return (
         <Tooltip content={mediaLinkDescription}>
           <Badge badgeType="warning" href={mediaLink}>
-            {intl.formatMessage(is4k ? messages.status4k : messages.status, {
-              status: intl.formatMessage(globalMessages.pending),
-            })}
+            {intl.formatMessage(
+              is4k
+                ? mediaType === 'book'
+                  ? messages.statusAudiobook
+                  : messages.status4k
+                : mediaType === 'book'
+                  ? messages.statusEbook
+                  : messages.status,
+              {
+                status: intl.formatMessage(globalMessages.pending),
+              }
+            )}
           </Badge>
         </Tooltip>
       );
@@ -365,11 +401,20 @@ const StatusBadge = ({
       return (
         <Tooltip content={mediaLinkDescription}>
           <Badge badgeType="danger" href={mediaLink}>
-            {intl.formatMessage(is4k ? messages.status4k : messages.status, {
-              status:
-                statusLabelOverride ??
-                intl.formatMessage(globalMessages.blocklisted),
-            })}
+            {intl.formatMessage(
+              is4k
+                ? mediaType === 'book'
+                  ? messages.statusAudiobook
+                  : messages.status4k
+                : mediaType === 'book'
+                  ? messages.statusEbook
+                  : messages.status,
+              {
+                status:
+                  statusLabelOverride ??
+                  intl.formatMessage(globalMessages.blocklisted),
+              }
+            )}
           </Badge>
         </Tooltip>
       );
@@ -400,7 +445,13 @@ const StatusBadge = ({
             >
               <span>
                 {intl.formatMessage(
-                  is4k ? messages.status4k : messages.status,
+                  is4k
+                    ? mediaType === 'book'
+                      ? messages.statusAudiobook
+                      : messages.status4k
+                    : mediaType === 'book'
+                      ? messages.statusEbook
+                      : messages.status,
                   {
                     status: inProgress
                       ? intl.formatMessage(globalMessages.processing)

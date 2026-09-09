@@ -1,3 +1,4 @@
+import HardcoverSetup from '@app/components/Common/HardcoverSetup';
 import Header from '@app/components/Common/Header';
 import ListView from '@app/components/Common/ListView';
 import PageTitle from '@app/components/Common/PageTitle';
@@ -5,6 +6,8 @@ import useDiscover from '@app/hooks/useDiscover';
 import ErrorPage from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
 import type {
+  AuthorResult,
+  BookResult,
   MovieResult,
   PersonResult,
   TvResult,
@@ -29,13 +32,20 @@ const Search = () => {
     titles,
     fetchMore,
     error,
-  } = useDiscover<MovieResult | TvResult | PersonResult>(
+  } = useDiscover<
+    MovieResult | TvResult | PersonResult | BookResult | AuthorResult
+  >(
     `/api/v1/search`,
     {
       query: router.query.query,
+      type: router.query.type,
     },
     { hideAvailable: false, hideBlocklisted: false }
   );
+
+  if ((error as any)?.response?.status === 503) {
+    return <HardcoverSetup />;
+  }
 
   if (error) {
     return <ErrorPage statusCode={500} />;

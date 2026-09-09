@@ -8,6 +8,7 @@ import RequestModal from '@app/components/RequestModal';
 import ErrorCard from '@app/components/TitleCard/ErrorCard';
 import Placeholder from '@app/components/TitleCard/Placeholder';
 import { useIsTouch } from '@app/hooks/useIsTouch';
+import useSettings from '@app/hooks/useSettings';
 import useToasts from '@app/hooks/useToasts';
 import { Permission, UserType, useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
@@ -21,7 +22,8 @@ import {
   MinusCircleIcon,
   StarIcon,
 } from '@heroicons/react/24/outline';
-import { MediaStatus } from '@server/constants/media';
+import { MediaRequestStatus, MediaStatus } from '@server/constants/media';
+import type { MediaRequest } from '@server/entity/MediaRequest';
 import type { Watchlist } from '@server/entity/Watchlist';
 import type { MediaType } from '@server/models/Search';
 import axios from 'axios';
@@ -39,8 +41,11 @@ interface TitleCardProps {
   userScore?: number;
   mediaType: MediaType;
   status?: MediaStatus;
+  status4k?: MediaStatus;
+  mediaRequests?: MediaRequest[];
   canExpand?: boolean;
   inProgress?: boolean;
+  position?: number;
   isAddedToWatchlist?: number | boolean;
   mutateParent?: () => void;
 }
@@ -62,14 +67,18 @@ const TitleCard = ({
   year,
   title,
   status,
+  status4k,
+  mediaRequests,
   mediaType,
   isAddedToWatchlist = false,
   inProgress = false,
+  position,
   canExpand = false,
   mutateParent,
 }: TitleCardProps) => {
   const isTouch = useIsTouch();
   const intl = useIntl();
+  const settings = useSettings();
   const { user, hasPermission } = useUser();
   const [isUpdating, setIsUpdating] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(status);
@@ -303,9 +312,11 @@ const TitleCard = ({
   const showRequestButton = hasPermission(
     [
       Permission.REQUEST,
-      mediaType === 'movie' || mediaType === 'collection'
-        ? Permission.REQUEST_MOVIE
-        : Permission.REQUEST_TV,
+      mediaType === 'book'
+        ? Permission.REQUEST_BOOK
+        : mediaType === 'movie' || mediaType === 'collection'
+          ? Permission.REQUEST_MOVIE
+          : Permission.REQUEST_TV,
     ],
     { type: 'or' }
   );
@@ -313,6 +324,49 @@ const TitleCard = ({
   const showHideButton = hasPermission([Permission.MANAGE_BLOCKLIST], {
     type: 'or',
   });
+
+  const showAudiobookStatus =
+    mediaType === 'book' &&
+    settings.currentSettings.bookAudioEnabled &&
+    hasPermission(
+      [
+        Permission.MANAGE_REQUESTS,
+        Permission.REQUEST_4K,
+        Permission.REQUEST_AUDIO_BOOK,
+      ],
+      { type: 'or' }
+    );
+
+  const hasActiveRequest = (is4k: boolean) =>
+    !!mediaRequests?.some(
+      (request) =>
+        request.is4k === is4k &&
+        request.status !== MediaRequestStatus.DECLINED &&
+        request.status !== MediaRequestStatus.FAILED
+    );
+
+  const isAvailableStatus = (mediaStatus?: MediaStatus) =>
+    mediaStatus === MediaStatus.AVAILABLE ||
+    mediaStatus === MediaStatus.PARTIALLY_AVAILABLE;
+
+  const ebookMissing =
+    mediaType === 'book' &&
+    currentStatus === MediaStatus.PROCESSING &&
+    !hasActiveRequest(false);
+  const audiobookMissing =
+    status4k === MediaStatus.PROCESSING && !hasActiveRequest(true);
+
+  const ebookDisplayStatus =
+    mediaType === 'book' &&
+    showAudiobookStatus &&
+    currentStatus === MediaStatus.AVAILABLE &&
+    !isAvailableStatus(status4k)
+      ? MediaStatus.PARTIALLY_AVAILABLE
+      : currentStatus;
+  const audiobookDisplayStatus =
+    status4k === MediaStatus.AVAILABLE && !isAvailableStatus(currentStatus)
+      ? MediaStatus.PARTIALLY_AVAILABLE
+      : status4k;
 
   return (
     <div
@@ -328,7 +382,9 @@ const TitleCard = ({
             ? 'movie'
             : mediaType === 'collection'
               ? 'collection'
-              : 'tv'
+              : mediaType === 'book'
+                ? 'book'
+                : 'tv'
         }
         onComplete={requestComplete}
         onUpdating={requestUpdating}
@@ -341,7 +397,9 @@ const TitleCard = ({
             ? 'movie'
             : mediaType === 'collection'
               ? 'collection'
-              : 'tv'
+              : mediaType === 'book'
+                ? 'book'
+                : 'tv'
         }
         show={showBlocklistModal}
         onCancel={closeBlocklistModal}
@@ -373,14 +431,36 @@ const TitleCard = ({
         tabIndex={0}
       >
         <div className="absolute inset-0 h-full w-full overflow-hidden">
+          {mediaType === 'book' && position && (
+            <Transition
+              as={Fragment}
+              show={!showDetail}
+              enter="transition-opacity"
+              enterFrom="opacity-0"
+              enterTo="opacity-100"
+              leave="transition-opacity"
+              leaveFrom="opacity-100"
+              leaveTo="opacity-0"
+            >
+              <span className="absolute bottom-0 right-0 z-10 rounded-br-[6px] rounded-tl-lg border-indigo-500 bg-indigo-600 px-2 py-1 text-sm font-bold text-white">
+                {`#${position}`}
+              </span>
+            </Transition>
+          )}
           <CachedImage
-            type="tmdb"
+            type={mediaType === 'book' ? 'hardcover' : 'tmdb'}
             className="absolute inset-0 h-full w-full"
             alt=""
             src={
-              image
-                ? `https://image.tmdb.org/t/p/w300_and_h450_face${image}`
-                : `/images/seerr_poster_not_found_logo_top.png`
+              mediaType === 'book'
+                ? image
+                  ? `${image}`
+                  : `https://assets.hardcover.app/static/covers/cover${
+                      (id % 9) + 1
+                    }.png`
+                : image
+                  ? `https://image.tmdb.org/t/p/w300_and_h450_face${image}`
+                  : `/images/seerr_poster_not_found_logo_top.png`
             }
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             fill
@@ -390,7 +470,9 @@ const TitleCard = ({
               className={`pointer-events-none z-40 self-start rounded-full border shadow-md ${
                 mediaType === 'movie' || mediaType === 'collection'
                   ? 'border-blue-500 bg-blue-600/80'
-                  : 'border-purple-600 bg-purple-600/80'
+                  : mediaType === 'book'
+                    ? 'border-red-500 bg-red-600/80'
+                    : 'border-purple-600 bg-purple-600/80'
               }`}
             >
               <div className="flex h-4 items-center px-2 py-2 text-center text-xs font-medium uppercase tracking-wider text-white sm:h-5">
@@ -398,7 +480,9 @@ const TitleCard = ({
                   ? intl.formatMessage(globalMessages.movie)
                   : mediaType === 'collection'
                     ? intl.formatMessage(globalMessages.collection)
-                    : intl.formatMessage(globalMessages.tvshow)}
+                    : mediaType === 'book'
+                      ? intl.formatMessage(globalMessages.book)
+                      : intl.formatMessage(globalMessages.tvshow)}
               </div>
             </div>
             {showDetail && currentStatus !== MediaStatus.BLOCKLISTED && (
@@ -456,15 +540,35 @@ const TitleCard = ({
                   </Button>
                 </Tooltip>
               )}
-            {currentStatus && currentStatus !== MediaStatus.UNKNOWN && (
+            {((currentStatus && currentStatus !== MediaStatus.UNKNOWN) ||
+              (showAudiobookStatus &&
+                status4k &&
+                status4k !== MediaStatus.UNKNOWN)) && (
               <div className="flex flex-col items-center gap-1">
-                <div className="pointer-events-none z-40 flex">
-                  <StatusBadgeMini
-                    status={currentStatus}
-                    inProgress={inProgress}
-                    shrink
-                  />
-                </div>
+                {ebookDisplayStatus &&
+                  ebookDisplayStatus !== MediaStatus.UNKNOWN && (
+                    <div className="pointer-events-none z-40 flex">
+                      <StatusBadgeMini
+                        status={ebookDisplayStatus}
+                        inProgress={inProgress}
+                        book={mediaType === 'book'}
+                        missing={ebookMissing}
+                        shrink
+                      />
+                    </div>
+                  )}
+                {showAudiobookStatus &&
+                  audiobookDisplayStatus &&
+                  audiobookDisplayStatus !== MediaStatus.UNKNOWN && (
+                    <div className="pointer-events-none z-40 flex">
+                      <StatusBadgeMini
+                        status={audiobookDisplayStatus}
+                        audiobook
+                        missing={audiobookMissing}
+                        shrink
+                      />
+                    </div>
+                  )}
               </div>
             )}
           </div>
@@ -500,7 +604,9 @@ const TitleCard = ({
                     ? `/movie/${id}`
                     : mediaType === 'collection'
                       ? `/collection/${id}`
-                      : `/tv/${id}`
+                      : mediaType === 'book'
+                        ? `/book/${id}`
+                        : `/tv/${id}`
                 }
                 className="absolute inset-0 h-full w-full cursor-pointer overflow-hidden text-left"
                 style={{
@@ -558,6 +664,7 @@ const TitleCard = ({
 
               <div className="absolute bottom-0 left-0 right-0 flex justify-between px-2 py-2">
                 {showRequestButton &&
+                  (showDetail || (!position && !image)) &&
                   (!currentStatus ||
                     currentStatus === MediaStatus.UNKNOWN ||
                     currentStatus === MediaStatus.DELETED) && (

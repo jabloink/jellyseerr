@@ -98,7 +98,7 @@ const postgresDevConfig: DataSourceOptions = {
   ssl: buildSslConfig(),
   poolSize: intFromEnv('DB_POOL_SIZE'),
   synchronize: false,
-  migrationsRun: true,
+  migrationsRun: false,
   logging: boolFromEnv('DB_LOG_QUERIES'),
   entities: ['server/entity/**/*.ts'],
   migrations: ['server/migration/postgres/**/*.ts'],

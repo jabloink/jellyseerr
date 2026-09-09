@@ -1,4 +1,5 @@
 import RadarrAPI from '@server/api/servarr/radarr';
+import ReadarrAPI from '@server/api/servarr/readarr';
 import SonarrAPI from '@server/api/servarr/sonarr';
 import { MediaStatus, MediaType } from '@server/constants/media';
 import { MediaServerType } from '@server/constants/server';
@@ -50,6 +51,7 @@ class Media {
           'media.id= watchlist.media and watchlist.requestedBy = :userId',
           { userId: user?.id }
         ) //,
+        .leftJoinAndSelect('media.requests', 'requests')
         .where(' media.tmdbId in (:...finalIds)', { finalIds })
         .getMany();
 
@@ -203,17 +205,21 @@ class Media {
     Object.assign(this, init);
   }
 
-  public resetServiceData(): void {
-    this.serviceId = null;
-    this.serviceId4k = null;
-    this.externalServiceId = null;
-    this.externalServiceId4k = null;
-    this.externalServiceSlug = null;
-    this.externalServiceSlug4k = null;
-    this.ratingKey = null;
-    this.ratingKey4k = null;
-    this.jellyfinMediaId = null;
-    this.jellyfinMediaId4k = null;
+  public resetServiceData(is4k?: boolean): void {
+    if (is4k === undefined || !is4k) {
+      this.serviceId = null;
+      this.externalServiceId = null;
+      this.externalServiceSlug = null;
+      this.ratingKey = null;
+      this.jellyfinMediaId = null;
+    }
+    if (is4k === undefined || is4k) {
+      this.serviceId4k = null;
+      this.externalServiceId4k = null;
+      this.externalServiceSlug4k = null;
+      this.ratingKey4k = null;
+      this.jellyfinMediaId4k = null;
+    }
   }
 
   @AfterLoad()
@@ -332,6 +338,34 @@ class Media {
         }
       }
     }
+
+    if (this.mediaType === MediaType.BOOK) {
+      if (this.serviceId !== null && this.externalServiceId !== null) {
+        const settings = getSettings();
+        const server = settings.readarr.find(
+          (readarr) => readarr.id === this.serviceId
+        );
+
+        if (server) {
+          this.serviceUrl = server.externalUrl
+            ? `${server.externalUrl}/book/${this.externalServiceId}`
+            : ReadarrAPI.buildUrl(server, `/book/${this.externalServiceId}`);
+        }
+      }
+
+      if (this.serviceId4k !== null && this.externalServiceId4k !== null) {
+        const settings = getSettings();
+        const server = settings.readarr.find(
+          (readarr) => readarr.id === this.serviceId4k
+        );
+
+        if (server) {
+          this.serviceUrl4k = server.externalUrl
+            ? `${server.externalUrl}/book/${this.externalServiceId4k}`
+            : ReadarrAPI.buildUrl(server, `/book/${this.externalServiceId4k}`);
+        }
+      }
+    }
   }
 
   @AfterLoad()
@@ -382,6 +416,32 @@ class Media {
         this.serviceId4k !== null
       ) {
         this.downloadStatus4k = downloadTracker.getSeriesProgress(
+          this.serviceId4k,
+          this.externalServiceId4k
+        );
+      }
+    }
+
+    if (this.mediaType === MediaType.BOOK) {
+      if (
+        this.externalServiceId !== undefined &&
+        this.externalServiceId !== null &&
+        this.serviceId !== undefined &&
+        this.serviceId !== null
+      ) {
+        this.downloadStatus = downloadTracker.getBookProgress(
+          this.serviceId,
+          this.externalServiceId
+        );
+      }
+
+      if (
+        this.externalServiceId4k !== undefined &&
+        this.externalServiceId4k !== null &&
+        this.serviceId4k !== undefined &&
+        this.serviceId4k !== null
+      ) {
+        this.downloadStatus4k = downloadTracker.getBookProgress(
           this.serviceId4k,
           this.externalServiceId4k
         );

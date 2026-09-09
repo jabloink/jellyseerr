@@ -85,6 +85,8 @@ const messages: { [messageName: string]: MessageDescriptor } = defineMessages(
     'jellyfin-recently-added-scan': 'Jellyfin Recently Added Scan',
     'availability-sync': 'Media Availability Sync',
     'radarr-scan': 'Radarr Scan',
+    'readarr-scan': 'Readarr Scan',
+    'readarr-recently-added-scan': 'Readarr Recently Added Scan',
     'sonarr-scan': 'Sonarr Scan',
     'download-sync': 'Download Sync',
     'download-sync-reset': 'Download Sync Reset',
@@ -740,7 +742,9 @@ const SettingsJobs = () => {
         <p className="description">
           {intl.formatMessage(messages.imagecacheDescription, {
             code: (msg: React.ReactNode) => (
-              <code className="bg-gray-800/50">{msg}</code>
+              <code key="code-block" className="bg-gray-800/50">
+                {msg}
+              </code>
             ),
             appDataPath: appData ? appData.appDataPath : '/app/config',
           })}
@@ -778,6 +782,17 @@ const SettingsJobs = () => {
               </Table.TD>
               <Table.TD>
                 {formatBytes(cacheData?.imageCache.avatar.size ?? 0)}
+              </Table.TD>
+            </tr>
+            <tr>
+              <Table.TD>Hardcover</Table.TD>
+              <Table.TD>
+                {intl.formatNumber(
+                  cacheData?.imageCache.hardcover.imageCount ?? 0
+                )}
+              </Table.TD>
+              <Table.TD>
+                {formatBytes(cacheData?.imageCache.hardcover.size ?? 0)}
               </Table.TD>
             </tr>
           </Table.TBody>

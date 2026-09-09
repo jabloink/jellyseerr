@@ -58,15 +58,13 @@ const messages = defineMessages(
     streamingRegionTip: 'Show streaming sites by regional availability',
     movierequestlimit: 'Movie Request Limit',
     seriesrequestlimit: 'Series Request Limit',
+    bookrequestlimit: 'Book Request Limit',
+    booksrequestlimit: 'Books Request Limit',
     enableOverride: 'Override Global Limit',
     applanguage: 'Display Language',
     languageDefault: 'Default ({language})',
-    discordId: 'Discord User ID',
-    discordIdTip:
-      'The <FindDiscordIdLink>multi-digit ID number</FindDiscordIdLink> associated with your Discord user account',
     validationemailrequired: 'Email required',
     validationemailformat: 'Valid email required',
-    validationDiscordId: 'You must provide a valid Discord user ID',
     plexwatchlistsyncmovies: 'Auto-Request Movies',
     plexwatchlistsyncmoviestip:
       'Automatically request movies on your <PlexWatchlistSupportLink>Plex Watchlist</PlexWatchlistSupportLink>',
@@ -82,6 +80,7 @@ const UserGeneralSettings = () => {
   const { locale, setLocale } = useLocale();
   const [movieQuotaEnabled, setMovieQuotaEnabled] = useState(false);
   const [tvQuotaEnabled, setTvQuotaEnabled] = useState(false);
+  const [bookQuotaEnabled, setBookQuotaEnabled] = useState(false);
   const router = useRouter();
   const {
     user,
@@ -119,9 +118,6 @@ const UserGeneralSettings = () => {
             (value) =>
               !value || validator.isEmail(value, { require_tld: false })
           ),
-    discordId: Yup.string()
-      .nullable()
-      .matches(/^\d{17,19}$/, intl.formatMessage(messages.validationDiscordId)),
   });
 
   useEffect(() => {
@@ -130,6 +126,9 @@ const UserGeneralSettings = () => {
     );
     setTvQuotaEnabled(
       data?.tvQuotaLimit != undefined && data?.tvQuotaDays != undefined
+    );
+    setBookQuotaEnabled(
+      data?.bookQuotaLimit != undefined && data?.bookQuotaDays != undefined
     );
   }, [data]);
 
@@ -158,7 +157,6 @@ const UserGeneralSettings = () => {
         initialValues={{
           displayName: data?.username !== user?.email ? data?.username : '',
           email: data?.email?.includes('@') ? data.email : '',
-          discordId: data?.discordId ?? '',
           locale: data?.locale,
           discoverRegion: data?.discoverRegion,
           streamingRegion: data?.streamingRegion,
@@ -167,6 +165,8 @@ const UserGeneralSettings = () => {
           movieQuotaDays: data?.movieQuotaDays,
           tvQuotaLimit: data?.tvQuotaLimit,
           tvQuotaDays: data?.tvQuotaDays,
+          bookQuotaLimit: data?.bookQuotaLimit,
+          bookQuotaDays: data?.bookQuotaDays,
           watchlistSyncMovies: data?.watchlistSyncMovies,
           watchlistSyncTv: data?.watchlistSyncTv,
         }}
@@ -178,7 +178,6 @@ const UserGeneralSettings = () => {
               username: values.displayName,
               email:
                 values.email || user?.jellyfinUsername || user?.plexUsername,
-              discordId: values.discordId,
               locale: values.locale,
               discoverRegion: values.discoverRegion,
               streamingRegion: values.streamingRegion,
@@ -189,6 +188,8 @@ const UserGeneralSettings = () => {
               movieQuotaDays: movieQuotaEnabled ? values.movieQuotaDays : null,
               tvQuotaLimit: tvQuotaEnabled ? values.tvQuotaLimit : null,
               tvQuotaDays: tvQuotaEnabled ? values.tvQuotaDays : null,
+              bookQuotaLimit: bookQuotaEnabled ? values.bookQuotaLimit : null,
+              bookQuotaDays: bookQuotaEnabled ? values.bookQuotaDays : null,
               watchlistSyncMovies: values.watchlistSyncMovies,
               watchlistSyncTv: values.watchlistSyncTv,
             });
@@ -339,36 +340,6 @@ const UserGeneralSettings = () => {
                   {errors.email && touched.email && (
                     <div className="error">{errors.email}</div>
                   )}
-                </div>
-              </div>
-              <div className="form-row">
-                <label htmlFor="discordId" className="text-label">
-                  {intl.formatMessage(messages.discordId)}
-                  {currentUser?.id === user?.id && (
-                    <span className="label-tip">
-                      {intl.formatMessage(messages.discordIdTip, {
-                        FindDiscordIdLink: (msg: React.ReactNode) => (
-                          <a
-                            href="https://support.discord.com/hc/en-us/articles/206346498-Where-can-I-find-my-User-Server-Message-ID-"
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {msg}
-                          </a>
-                        ),
-                      })}
-                    </span>
-                  )}
-                </label>
-                <div className="form-input-area">
-                  <div className="form-input-field">
-                    <Field id="discordId" name="discordId" type="text" />
-                  </div>
-                  {errors.discordId &&
-                    touched.discordId &&
-                    typeof errors.discordId === 'string' && (
-                      <div className="error">{errors.discordId}</div>
-                    )}
                 </div>
               </div>
               <div className="form-row">
@@ -534,6 +505,46 @@ const UserGeneralSettings = () => {
                             limitOverride={
                               !tvQuotaEnabled
                                 ? data?.globalTvQuotaLimit
+                                : undefined
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="form-row">
+                      <label htmlFor="bookQuotaLimit" className="text-label">
+                        <span>
+                          {intl.formatMessage(messages.bookrequestlimit)}
+                        </span>
+                      </label>
+                      <div className="form-input-area">
+                        <div className="flex flex-col">
+                          <div className="mb-4 flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={bookQuotaEnabled}
+                              onChange={() => setBookQuotaEnabled((s) => !s)}
+                            />
+                            <span className="ml-2 text-gray-300">
+                              {intl.formatMessage(messages.enableOverride)}
+                            </span>
+                          </div>
+                          <QuotaSelector
+                            isDisabled={!bookQuotaEnabled}
+                            dayFieldName="bookQuotaDays"
+                            limitFieldName="bookQuotaLimit"
+                            mediaType="book"
+                            onChange={setFieldValue}
+                            defaultDays={values.bookQuotaDays}
+                            defaultLimit={values.bookQuotaLimit}
+                            dayOverride={
+                              !bookQuotaEnabled
+                                ? data?.globalBookQuotaDays
+                                : undefined
+                            }
+                            limitOverride={
+                              !bookQuotaEnabled
+                                ? data?.globalBookQuotaLimit
                                 : undefined
                             }
                           />

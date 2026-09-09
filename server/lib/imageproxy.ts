@@ -1,10 +1,10 @@
 import logger from '@server/logger';
-import { requestInterceptorFunction } from '@server/utils/customProxyAgent';
+import { proxyRequestInterceptor } from '@server/utils/customProxyAgent';
 import axios, { type AxiosInstance } from 'axios';
 import rateLimit, { type rateLimitOptions } from 'axios-rate-limit';
 import { createHash } from 'crypto';
 import { promises } from 'fs';
-import mime from 'mime/lite';
+import mime from 'mime';
 import path, { join } from 'path';
 
 type ImageResponse = {
@@ -131,6 +131,9 @@ class ImageProxy {
   private axios: AxiosInstance;
   private cacheVersion;
   private key;
+  private transform?: (
+    buffer: Buffer
+  ) => Promise<{ buffer: Buffer; extension: string }>;
 
   constructor(
     key: string,
@@ -139,15 +142,19 @@ class ImageProxy {
       cacheVersion?: number;
       rateLimitOptions?: rateLimitOptions;
       headers?: Record<string, string>;
+      transform?: (
+        buffer: Buffer
+      ) => Promise<{ buffer: Buffer; extension: string }>;
     } = {}
   ) {
     this.cacheVersion = options.cacheVersion ?? 1;
     this.key = key;
+    this.transform = options.transform;
     this.axios = axios.create({
       baseURL: baseUrl,
       headers: options.headers,
     });
-    this.axios.interceptors.request.use(requestInterceptorFunction);
+    this.axios.interceptors.request.use(proxyRequestInterceptor);
 
     if (options.rateLimitOptions) {
       this.axios = rateLimit(this.axios, options.rateLimitOptions);
@@ -173,6 +180,11 @@ class ImageProxy {
         }
       }
 
+      // If there's a transform, serve the raw image now and optimize in background
+      if (this.transform && newImage.meta.cacheMiss) {
+        this.optimizeAndCache(newImage, cacheKey);
+      }
+
       return newImage;
     }
 
@@ -182,6 +194,33 @@ class ImageProxy {
     }
 
     return imageResponse;
+  }
+
+  private async optimizeAndCache(
+    image: ImageResponse,
+    cacheKey: string
+  ): Promise<void> {
+    if (!this.transform) return;
+
+    try {
+      const { buffer, extension } = await this.transform(image.imageBuffer);
+      const directory = join(this.getCacheDirectory(), cacheKey);
+      const expireAt = Date.now() + image.meta.curRevalidate * 1000;
+
+      await this.writeToCacheDir(
+        directory,
+        extension,
+        image.meta.curRevalidate,
+        expireAt,
+        buffer,
+        image.meta.etag
+      );
+    } catch (e) {
+      logger.debug('Failed to optimize image in background.', {
+        label: 'Image Cache',
+        errorMessage: e.message,
+      });
+    }
   }
 
   public async clearCachedImage(path: string) {
@@ -270,15 +309,18 @@ class ImageProxy {
       const buffer = Buffer.from(response.data, 'binary');
 
       const contentType = response.headers['content-type'] || '';
-      const extension = mime.getExtension(contentType) || '';
+      const extension = (mime.getExtension(contentType) || '').replace(
+        /[^\w-]/g,
+        ''
+      );
 
       let maxAge = Number(
         (response.headers['cache-control'] ?? '0').split('=')[1]
       );
 
-      if (!maxAge) maxAge = 86400;
+      if (!maxAge) maxAge = 604800;
       const expireAt = Date.now() + maxAge * 1000;
-      const etag = (response.headers.etag ?? '').replace(/"/g, '');
+      const etag = (response.headers.etag ?? '').replace(/[^\w-]/g, '');
 
       await this.writeToCacheDir(
         directory,
